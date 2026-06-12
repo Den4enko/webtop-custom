@@ -28,6 +28,8 @@ RUN dnf clean all && \
         plasma-browser-integration \
         kate \
         ping \
+        fastfetch \
+        htop \
         nano \
         fuse-libs && \
     dnf clean all
