@@ -73,10 +73,10 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ id.meta.outputs.tags }}
+          tags: ${{ steps.meta.outputs.tags }}
           # Dynamically inject the verified upstream digest into the image metadata labels
           labels: |
-            ${{ id.meta.outputs.labels }}
+            ${{ steps.meta.outputs.labels }}
             upstream.digest=${{ steps.check.outputs.upstream_digest }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
