@@ -11,7 +11,7 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
-  UPSTREAM_IMAGE: lscr.io/linuxserver/webtop:fedora-kde
+  UPSTREAM_IMAGE: ghcr.io/linuxserver/webtop:fedora-kde
 
 jobs:
   check-and-build:
@@ -31,22 +31,33 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # ADDED: This sets up Buildx and enables advanced caching features like type=gha
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Check upstream image digest
         id: check
         run: |
-          # 1. Fetch the SHA256 digest of the latest upstream image from Linuxserver
-          UPSTREAM_DIGEST=$(skopeo inspect docker://${{ env.UPSTREAM_IMAGE }} --format '{{.Digest}}')
+          # 1. Fetch the SHA256 digest of the latest upstream image (with a 20s timeout safeguard)
+          echo "Fetching upstream digest..."
+          UPSTREAM_DIGEST=$(timeout 20s skopeo inspect docker://${{ env.UPSTREAM_IMAGE }} --format '{{.Digest}}' || echo "timeout_failed")
+          
+          if [ "$UPSTREAM_DIGEST" = "timeout_failed" ] || [ -z "$UPSTREAM_DIGEST" ]; then
+            echo "::error::Skopeo timed out or failed to fetch upstream registry data."
+            exit 1
+          fi
           echo "Upstream digest: $UPSTREAM_DIGEST"
           
-          # 2. Fetch the upstream digest that was recorded in our own image during the previous build
+          # 2. Fetch the upstream digest recorded in our own image (with a 20s timeout safeguard)
+          echo "Fetching our local image digest..."
           MY_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
-          CURRENT_DIGEST=$(skopeo inspect docker://$MY_IMAGE --format '{{index .Labels "upstream.digest"}}' 2>/dev/null || echo "none")
-          echo "Our image recorded digest: $CURRENT_DIGEST"
+          CURRENT_DIGEST=$(timeout 20s skopeo inspect docker://$MY_IMAGE --format '{{index .Labels "upstream.digest"}}' 2>/dev/null || echo "none")
           
-          # Handle fallback values if the label does not exist yet
-          if [ "$CURRENT_DIGEST" = "<no value>" ] || [ -z "$CURRENT_DIGEST" ]; then
+          # Handle fallback values if the label does not exist, or if the command failed/timed out
+          if [ "$CURRENT_DIGEST" = "<no value>" ] || [ -z "$CURRENT_DIGEST" ] || [ "$CURRENT_DIGEST" = "none" ]; then
             CURRENT_DIGEST="none"
           fi
+          echo "Our image recorded digest: $CURRENT_DIGEST"
           
           # 3. Compare digests. If it is a scheduled run and digests match, skip the build stage.
           if [ "$UPSTREAM_DIGEST" = "$CURRENT_DIGEST" ] && [ "${{ github.event_name }}" = "schedule" ]; then
