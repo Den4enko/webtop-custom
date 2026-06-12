@@ -1,0 +1,82 @@
+name: Build on Upstream Update
+
+on:
+  schedule:
+    - cron: '0 */6 * * *' # Check for upstream updates every 6 hours
+  push:
+    branches:
+      - main           # Build whenever code is pushed to the main branch
+  workflow_dispatch:   # Allow manual trigger via the GitHub UI
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  UPSTREAM_IMAGE: lscr.io/linuxserver/webtop:fedora-kde
+
+jobs:
+  check-and-build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check upstream image digest
+        id: check
+        run: |
+          # 1. Fetch the SHA256 digest of the latest upstream image from Linuxserver
+          UPSTREAM_DIGEST=$(skopeo inspect docker://${{ env.UPSTREAM_IMAGE }} --format '{{.Digest}}')
+          echo "Upstream digest: $UPSTREAM_DIGEST"
+          
+          # 2. Fetch the upstream digest that was recorded in our own image during the previous build
+          MY_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+          CURRENT_DIGEST=$(skopeo inspect docker://$MY_IMAGE --format '{{index .Labels "upstream.digest"}}' 2>/dev/null || echo "none")
+          echo "Our image recorded digest: $CURRENT_DIGEST"
+          
+          # Handle fallback values if the label does not exist yet
+          if [ "$CURRENT_DIGEST" = "<no value>" ] || [ -z "$CURRENT_DIGEST" ]; then
+            CURRENT_DIGEST="none"
+          fi
+          
+          # 3. Compare digests. If it is a scheduled run and digests match, skip the build stage.
+          if [ "$UPSTREAM_DIGEST" = "$CURRENT_DIGEST" ] && [ "${{ github.event_name }}" = "schedule" ]; then
+            echo "No updates found in upstream image. Skipping build."
+            echo "should_build=false" >> $GITHUB_OUTPUT
+          else
+            echo "New upstream version detected or force run. Proceeding to build."
+            echo "should_build=true" >> $GITHUB_OUTPUT
+            echo "upstream_digest=$UPSTREAM_DIGEST" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Extract metadata (tags, labels) for Docker
+        if: steps.check.outputs.should_build == 'true'
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest
+
+      - name: Build and push Docker image
+        if: steps.check.outputs.should_build == 'true'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ id.meta.outputs.tags }}
+          # Dynamically inject the verified upstream digest into the image metadata labels
+          labels: |
+            ${{ id.meta.outputs.labels }}
+            upstream.digest=${{ steps.check.outputs.upstream_digest }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
