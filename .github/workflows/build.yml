@@ -1,20 +1,21 @@
-name: Build on Upstream Update
+name: Weekly Webtop Build
 
 on:
   schedule:
-    - cron: '0 */6 * * *' # Check for upstream updates every 6 hours
+    # Runs every Wednesday at 19:00 UTC (20:00/21:00 Germany time depending on DST)
+    - cron: '0 19 * * 3'
   push:
     branches:
-      - main           # Build whenever code is pushed to the main branch
-  workflow_dispatch:   # Allow manual trigger via the GitHub UI
+      - main           # Still allows manual trigger via push to main
+  workflow_dispatch:   # Still allows manual trigger via GitHub UI
 
 env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
-  UPSTREAM_IMAGE: ghcr.io/linuxserver/webtop:fedora-kde
 
 jobs:
-  check-and-build:
+  build-and-push:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -31,46 +32,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # ADDED: This sets up Buildx and enables advanced caching features like type=gha
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Check upstream image digest
-        id: check
-        run: |
-          # 1. Fetch the SHA256 digest of the latest upstream image (with a 20s timeout safeguard)
-          echo "Fetching upstream digest..."
-          UPSTREAM_DIGEST=$(timeout 20s skopeo inspect docker://${{ env.UPSTREAM_IMAGE }} --format '{{.Digest}}' || echo "timeout_failed")
-          
-          if [ "$UPSTREAM_DIGEST" = "timeout_failed" ] || [ -z "$UPSTREAM_DIGEST" ]; then
-            echo "::error::Skopeo timed out or failed to fetch upstream registry data."
-            exit 1
-          fi
-          echo "Upstream digest: $UPSTREAM_DIGEST"
-          
-          # 2. Fetch the upstream digest recorded in our own image (with a 20s timeout safeguard)
-          echo "Fetching our local image digest..."
-          MY_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
-          CURRENT_DIGEST=$(timeout 20s skopeo inspect docker://$MY_IMAGE --format '{{index .Labels "upstream.digest"}}' 2>/dev/null || echo "none")
-          
-          # Handle fallback values if the label does not exist, or if the command failed/timed out
-          if [ "$CURRENT_DIGEST" = "<no value>" ] || [ -z "$CURRENT_DIGEST" ] || [ "$CURRENT_DIGEST" = "none" ]; then
-            CURRENT_DIGEST="none"
-          fi
-          echo "Our image recorded digest: $CURRENT_DIGEST"
-          
-          # 3. Compare digests. If it is a scheduled run and digests match, skip the build stage.
-          if [ "$UPSTREAM_DIGEST" = "$CURRENT_DIGEST" ] && [ "${{ github.event_name }}" = "schedule" ]; then
-            echo "No updates found in upstream image. Skipping build."
-            echo "should_build=false" >> $GITHUB_OUTPUT
-          else
-            echo "New upstream version detected or force run. Proceeding to build."
-            echo "should_build=true" >> $GITHUB_OUTPUT
-            echo "upstream_digest=$UPSTREAM_DIGEST" >> $GITHUB_OUTPUT
-          fi
-
       - name: Extract metadata (tags, labels) for Docker
-        if: steps.check.outputs.should_build == 'true'
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -79,15 +44,12 @@ jobs:
             type=raw,value=latest
 
       - name: Build and push Docker image
-        if: steps.check.outputs.should_build == 'true'
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
           tags: ${{ steps.meta.outputs.tags }}
-          # Dynamically inject the verified upstream digest into the image metadata labels
-          labels: |
-            ${{ steps.meta.outputs.labels }}
-            upstream.digest=${{ steps.check.outputs.upstream_digest }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Keep caching enabled to speed up builds if layers didn't change
           cache-from: type=gha
           cache-to: type=gha,mode=max
