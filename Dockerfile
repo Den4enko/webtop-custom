@@ -31,5 +31,6 @@ RUN dnf clean all && \
         fastfetch \
         htop \
         nano \
+        tree \
         fuse-libs && \
     dnf clean all
