@@ -32,5 +32,6 @@ RUN dnf clean all && \
         htop \
         nano \
         tree \
+        rclone \
         fuse-libs && \
     dnf clean all
