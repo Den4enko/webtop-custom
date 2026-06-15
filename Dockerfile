@@ -19,7 +19,7 @@ RUN dnf clean all && \
 
 RUN dnf clean all && \
     dnf update -y && \
-    dnf install -y xournalpp && \
+    dnf install -y pipewire-jack-audio-connection-kit xournalpp && \
     dnf clean all
 
 # Other Custom Packages
