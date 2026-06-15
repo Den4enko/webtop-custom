@@ -11,16 +11,18 @@ enabled=1\n\
 gpgcheck=1\n\
 gpgkey=https://dl.google.com/linux/linux_signing_key.pub" > /etc/yum.repos.d/google-chrome.repo
 
-# LAYER 2: Install ONLY Google Chrome
-# This layer is heavy (~600MB) but it will be cached and "frozen"
+# Google Chrome
 RUN dnf clean all && \
     dnf update -y && \
     dnf install -y google-chrome-stable && \
     dnf clean all
 
-# LAYER 3: Install your lightweight utility packages
-# If you add or remove packages here, ONLY this layer will re-build.
-# Chrome will be pulled instantly from the cache!
+RUN dnf clean all && \
+    dnf update -y && \
+    dnf install -y xournalpp && \
+    dnf clean all
+
+# Other Custom Packages
 RUN dnf clean all && \
     dnf install -y \
         spectacle \
@@ -33,6 +35,5 @@ RUN dnf clean all && \
         nano \
         tree \
         rclone \
-        pipewire-jack-audio-connection-kit \
         fuse-libs && \
     dnf clean all
