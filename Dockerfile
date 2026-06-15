@@ -33,5 +33,6 @@ RUN dnf clean all && \
         nano \
         tree \
         rclone \
+        pipewire-jack-audio-connection-kit \
         fuse-libs && \
     dnf clean all
