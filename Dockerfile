@@ -13,12 +13,10 @@ gpgkey=https://dl.google.com/linux/linux_signing_key.pub" > /etc/yum.repos.d/goo
 
 # Google Chrome
 RUN dnf clean all && \
-    dnf update -y && \
     dnf install -y google-chrome-stable && \
     dnf clean all
 
 RUN dnf clean all && \
-    dnf update -y && \
     dnf install -y pipewire-jack-audio-connection-kit xournalpp && \
     dnf clean all
 
