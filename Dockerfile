@@ -17,7 +17,6 @@ RUN dnf clean all && \
         tree \
         rclone \
         flatpak \
-        podman \
         fuse-libs && \
     dnf clean all
 
