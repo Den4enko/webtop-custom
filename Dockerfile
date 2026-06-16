@@ -33,5 +33,6 @@ RUN dnf clean all && \
         nano \
         tree \
         rclone \
+        flatpak \
         fuse-libs && \
     dnf clean all
