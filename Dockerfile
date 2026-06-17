@@ -1,9 +1,5 @@
-FROM lscr.io/linuxserver/webtop:fedora-kde
-
-# Switch to root to manage system packages
 USER root
 
-# Other Custom Packages
 RUN dnf clean all && \
     dnf install -y \
         spectacle \
