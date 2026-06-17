@@ -1,56 +1,64 @@
-name: Build Custom Webtop
+name: Weekly Webtop Build
 
 on:
   schedule:
-    # Build automatically once a week to receive upstream security updates
-    - cron: '0 3 * * 1'
-  workflow_dispatch: # Allow manual trigger from the GitHub Actions UI
+    - cron: '0 19 * * 3'
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  build:
+  build-and-push:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
 
     steps:
-      # 1. Checkout your custom repository to get your Dockerfile snippet
-      - name: Checkout custom repo
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Clone the original LinuxServer repository (only the fedora-kde branch)
       - name: Clone LinuxServer Webtop
         run: |
           git clone --single-branch --branch fedora-kde https://github.com/linuxserver/docker-webtop.git ls-webtop
 
-      # 3. Modify the original Dockerfile on the fly
       - name: Patch Dockerfile
         run: |
-          # Remove firefox and chromium from the original ls-webtop Dockerfile
           sed -i 's/firefox//g' ls-webtop/Dockerfile
           sed -i 's/chromium//g' ls-webtop/Dockerfile
-
-          # Append your custom Dockerfile block to the end of the original one
           cat Dockerfile >> ls-webtop/Dockerfile
 
-      # 4. Set up Docker Buildx for advanced building capabilities
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      # 5. Authenticate to GitHub Container Registry (GHCR)
-      - name: Login to GHCR
+      - name: Log in to the Container registry
         uses: docker/login-action@v3
         with:
-          registry: ghcr.io
+          registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # 6. Build the image from the modified ls-webtop folder and push it
-      - name: Build and push
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest
+
+      - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: ./ls-webtop
           file: ./ls-webtop/Dockerfile
           push: true
-          # The image will be published to ghcr.io/<your-username>/webtop-custom:latest
-          tags: ghcr.io/${{ github.repository_owner }}/webtop-custom:latest
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
