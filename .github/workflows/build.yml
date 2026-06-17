@@ -30,8 +30,10 @@ jobs:
 
       - name: Patch Dockerfile
         run: |
-          sed -i 's/firefox//g' ls-webtop/Dockerfile
-          sed -i 's/chromium//g' ls-webtop/Dockerfile
+          sed -i '/firefox/s/ &&/ || true &&/' ls-webtop/Dockerfile
+          sed -i '/chromium/s/ &&/ || true &&/' ls-webtop/Dockerfile
+          sed -i '/^[[:space:]]*firefox/d' ls-webtop/Dockerfile
+          sed -i '/^[[:space:]]*chromium/d' ls-webtop/Dockerfile
           cat Dockerfile >> ls-webtop/Dockerfile
 
       - name: Log in to the Container registry
