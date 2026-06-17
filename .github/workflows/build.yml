@@ -2,11 +2,12 @@ name: Weekly Webtop Build
 
 on:
   schedule:
+    # Runs every Wednesday at 19:00 UTC (20:00/21:00 Germany time depending on DST)
     - cron: '0 19 * * 3'
   push:
     branches:
-      - main
-  workflow_dispatch:
+      - main           # Still allows manual trigger via push to main
+  workflow_dispatch:   # Still allows manual trigger via GitHub UI
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -23,18 +24,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Clone LinuxServer Webtop
-        run: |
-          git clone --single-branch --branch fedora-kde https://github.com/linuxserver/docker-webtop.git ls-webtop
-
-      - name: Patch Dockerfile
-        run: |
-          sed -i '/firefox/s/ &&/ || true &&/' ls-webtop/Dockerfile
-          sed -i '/chromium/s/ &&/ || true &&/' ls-webtop/Dockerfile
-          sed -i '/^[[:space:]]*firefox/d' ls-webtop/Dockerfile
-          sed -i '/^[[:space:]]*chromium/d' ls-webtop/Dockerfile
-          cat Dockerfile >> ls-webtop/Dockerfile
 
       - name: Log in to the Container registry
         uses: docker/login-action@v3
@@ -57,10 +46,10 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
-          context: ./ls-webtop
-          file: ./ls-webtop/Dockerfile
+          context: .
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # Keep caching enabled to speed up builds if layers didn't change
           cache-from: type=gha
           cache-to: type=gha,mode=max
