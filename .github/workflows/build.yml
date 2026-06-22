@@ -2,8 +2,8 @@ name: Weekly Webtop Build
 
 on:
   schedule:
-    # Runs every Wednesday at 19:00 UTC (20:00/21:00 Germany time depending on DST)
-    - cron: '0 19 * * 3'
+    # Runs every Sunday at 19:00 UTC (20:00/21:00 Germany time depending on DST)
+    - cron: '0 19 * * 0'
   push:
     branches:
       - main           # Still allows manual trigger via push to main
